@@ -303,8 +303,9 @@ and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 
             o_err_msg = ""
             for i in range(len(product)):
                 args = (
-                    msisdn, product[i]['product_id'], product[i]['count'], product[i]['paid'], product[i]['product_id'], orders_id[0]['id_orders'], o_result, o_err_msg)
+                    msisdn, product[i]['product_id'], product[i]['count'], product[i]['paid'], product[i]['value'], orders_id[0]['id_orders'], o_result, o_err_msg)
                 cursor.callproc('add_orders', args)
+  
                 cursor.execute(
                     "select @_add_orders_5,@_add_orders_6,@_add_orders_7")
                 result = cursor.fetchall()
@@ -361,7 +362,7 @@ select max(pi2.id) from piza_contact_info pi2 where pi2.phone=pi.phone);""")
 def post_order_detail(msisdn, order_id):
     try:
         with connections['default'].cursor() as cursor:
-            cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, pi.volume_name, pp.id as product_id, pp.name, pd.branch_id, CONCAT('media/', pp.image) as image
+            cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, po.product_value volume_name, pp.id as product_id, pp.name, pd.branch_id, CONCAT('media/', pp.image) as image
 from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
 where po.phone=""" + str(msisdn) +"""
 and po.product_value=pi.id
@@ -391,7 +392,7 @@ order by date;""")
 def post_order_detail_courier(msisdn, order_id):
     try:
         with connections['default'].cursor() as cursor:
-            cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, pi.volume_name, pp.id as product_id, pp.name, pd.courier, pd.branch_id, CONCAT('media/', pp.image) as image
+            cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, po.product_value volume_name, pp.id as product_id, pp.name, pd.courier, pd.branch_id, CONCAT('media/', pp.image) as image
 from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
 where po.product_value=pi.id
 and po.order_id=pd.order_id
