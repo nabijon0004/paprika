@@ -1,7 +1,8 @@
+from django.http import HttpResponse
 from django.shortcuts import render
 from rest_framework import generics, status
 from piza.serializers import ProductDetailSerializer, ProductListSerializer, ProductCategorySerializer, CategoryListSerializer, OrderDetailSerializer, OrderItemDetailSerializer, ProductItemSerializer, AddContactSerializer, PizaOrder, DeliverySerializer, SlideListSerializer, TextMenuListSerializer
-from piza.models import Products, category, ProductItem, pizaproduct_order, orders, add_orders_post, profil_list, orders_list, order_detail, slide, menu_text, add_contract_post, add_pick_up, orders_list_courier, order_detail_courier, add_status_change, orders_report_courier, push_courier, orders_list_kitchens
+from piza.models import Products, category, ProductItem, pizaproduct_order, orders, add_orders_post, profil_list, orders_list, report_list, report_order_list, order_detail, slide, menu_text, add_contract_post, add_pick_up, orders_list_courier, order_detail_courier, add_status_change, orders_report_courier, push_courier, orders_list_kitchens, add_branch_change, add_status_change_kitchens
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from piza.utils import filterResponse
@@ -159,6 +160,64 @@ class StatusChange(APIView):
             else:
                 return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
 
+class StatusChangeKitchens(APIView):        
+    def post(self, request):
+        validation = serializer.StatusChangeSerializer(data=request.data)
+        if validation.is_valid(raise_exception=True):
+            r=add_status_change_kitchens(
+                    request, 
+                    order_id = validation.data['order_id'],
+                    status_id = validation.data['status_id']
+                )
+            if 'err_code' in r.keys():
+                if r['err_code']!=0:
+                    content = {
+                        'err_code': r['err_code'],
+                        'err_msg': r['err_msg'],
+                        }
+                    return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return filterResponse(
+                        r
+                    )
+            elif  r['un_authorized']==True:
+                content = {
+                        'err_code': -400,
+                        'err_msg': "You are not authorized",
+                        }
+                return Response(content, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
+class BranchChange(APIView):        
+    def post(self, request):
+        validation = serializer.BranchChangeSerializer(data=request.data)
+        if validation.is_valid(raise_exception=True):
+            r=add_branch_change(
+                    request, 
+                    order_id = validation.data['order_id'],
+                    branch_id = validation.data['branch_id']
+                )
+            if 'err_code' in r.keys():
+                if r['err_code']!=0:
+                    content = {
+                        'err_code': r['err_code'],
+                        'err_msg': r['err_msg'],
+                        }
+                    return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return filterResponse(
+                        r
+                    )
+            elif  r['un_authorized']==True:
+                content = {
+                        'err_code': -400,
+                        'err_msg': "You are not authorized",
+                        }
+                return Response(content, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
 class OrdersList(APIView):
     def get(self, request):
         resp=orders_list(request)
@@ -175,6 +234,52 @@ class OrdersList(APIView):
                 )
         else:
             return filterResponse(resp)
+
+class ReportList(APIView):
+    def post(self, request):
+            validation = serializer.reportlist(data=request.data)
+            if validation.is_valid(raise_exception=True):
+                r = report_list(
+                        request, 
+                        period=validation.data['period'],
+                        branch_id=validation.data['branch_id']
+                        )
+                if 'err_code' in r.keys():
+                    if r['err_code']!=0:
+                        content = {
+                            'err_code': r['err_code'],
+                            'err_msg': r['err_msg'],
+                            }
+                        return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        return filterResponse(
+                            r
+                        )
+                else:                
+                    return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
+
+class ReporOrdertList(APIView):
+    def post(self, request):
+            validation = serializer.reportlist(data=request.data)
+            if validation.is_valid(raise_exception=True):
+                r = report_order_list(
+                        request, 
+                        period=validation.data['period'],
+                        branch_id=validation.data['branch_id']
+                        )
+                if 'err_code' in r.keys():
+                    if r['err_code']!=0:
+                        content = {
+                            'err_code': r['err_code'],
+                            'err_msg': r['err_msg'],
+                            }
+                        return Response(content, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        return filterResponse(
+                            r
+                        )
+                else:                
+                    return Response('Bad request', status=status.HTTP_400_BAD_REQUEST)
 
 class OrdersListCourier(APIView):
     def get(self, request):
@@ -352,3 +457,12 @@ class OrdersListKitchens(APIView):
         else:
             return filterResponse(resp)
     
+
+def index(request):
+    orders_list = orders.objects.all()
+    # res = '<h1>Список заказов</h1>'
+    # for order in orders_list:
+    #     print(order)
+    #     res +=f'<div><h3>{ order.order_id }</h3><div>{ order.date }</div></div><hr>'
+    # return HttpResponse(res)
+    return render(request, 'reports/index.html', {'orders': orders_list})

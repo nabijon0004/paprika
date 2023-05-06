@@ -75,6 +75,10 @@ class StatusChangeSerializer(serializers.Serializer):
     order_id = serializers.IntegerField()
     status_id = serializers.IntegerField()
 
+class BranchChangeSerializer(serializers.Serializer):
+    order_id = serializers.IntegerField()
+    branch_id = serializers.IntegerField()
+
 class PizaOrder(serializers.Serializer):
     phone = serializers.CharField(required=True)
     time_delivery = serializers.DateField(required=True)
@@ -93,3 +97,8 @@ class addorders(serializers.Serializer):
 
 class orderdetail(serializers.Serializer):
     order_id = serializers.IntegerField()
+
+
+class reportlist(serializers.Serializer):
+    period = serializers.CharField(default='day')
+    branch_id = serializers.IntegerField()

@@ -44,7 +44,7 @@ class OrdersAdmin(admin.ModelAdmin):
     list_display = ('phone', 'date', 'order_id')
     search_fields = ('phone', 'delivery_address')
     list_filter = ['date']
-    inlines = [DeliveryAdmin]
+    #inlines = [DeliveryAdmin]
 
 admin.site.register(orders, OrdersAdmin)
 

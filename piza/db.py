@@ -8,6 +8,8 @@ from operator import itemgetter
 import requests
 import json
 import operator
+import datetime
+from datetime import date, timedelta
 
 def post_pizaproduct_order(request, category):
     try:
@@ -130,11 +132,164 @@ where di.phone=""" + str(msisdn) +""" and di.order_id is not null and di.status=
                 "err_code": 0}
         return content
 
+def post_report_list(period, branch_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            current_date = datetime.date.today()
+            tomorrow = current_date + datetime.timedelta(days=1)
+            last_day_of_prev_month = date.today().replace(day=1)
+
+            if period == 'month':
+                stime = last_day_of_prev_month
+                etime = tomorrow
+            else:
+                stime = current_date
+                etime = tomorrow
+
+            if branch_id == 0:
+                branch_id = '1,2,3'
+
+            cursor.execute("""select count(distinct(po.order_id)) count_order, sum(po.paid) total_sum,
+                            (select sum(po.paid)
+                            from piza_orders po, piza_deliveryinfo pd 
+                            where po.order_id=pd.order_id
+                            AND pd.branch_id in (""" + str(branch_id) +""")
+                            and po.date BETWEEN '""" + str(stime) +"""' AND '""" + str(etime) +"""'
+                            AND pd.adress != '') delivery_sum,
+                            (select sum(po.paid)
+                            from piza_orders po, piza_deliveryinfo pd 
+                            where po.order_id=pd.order_id
+                            AND pd.branch_id in (""" + str(branch_id) +""")
+                            and po.date BETWEEN '""" + str(stime) +"""' AND '""" + str(etime) +"""'
+                            AND pd.adress = '') samovoz
+                            from piza_orders po, piza_deliveryinfo pd 
+                            where po.order_id=pd.order_id
+                            AND pd.branch_id in (""" + str(branch_id) +""")
+                            and po.date BETWEEN '""" + str(stime) +"""' AND '""" + str(etime) +"""' ;""")
+            colomns = [i[0] for i in cursor.description]
+            report_list = [dict(zip(colomns, row)) for row in cursor]
+            if report_list[0]['count_order'] == 0:
+                resp = {
+                "err_code": -3,
+                "err_msg": 'Сейчас заказов нет'}
+                return resp
+
+            cursor.execute("""select distinct(pci.name) name_courier, sum(po.paid) sum
+                            from piza_orders po, piza_deliveryinfo pd, piza_contact_info pci
+                            where po.order_id=pd.order_id
+                            and po.date BETWEEN '""" + str(stime) +"""' AND '""" + str(etime) +"""'
+                            AND pd.courier=pci.phone
+                            AND pd.courier != ''
+                            AND pd.adress != ''
+                            group by pci.name;""")
+            colomns = [i[0] for i in cursor.description]
+            report_courier = [dict(zip(colomns, row)) for row in cursor]
+
+            resp = {
+                "count_order": report_list[0]['count_order'],
+                "total_sum": report_list[0]['total_sum'],
+                "delivery_sum": report_list[0]['delivery_sum'],
+                "samovoz": report_list[0]['samovoz'],
+                "report_courier": report_courier,
+                "err_code": 0,
+                "err_msg": 'sucsess'}
+            return resp
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_contract.post_add_contract -> " + str(sys.exc_info()[1])
+            }
+
+def post_report_order_list(period, branch_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            current_date = datetime.date.today()
+            tomorrow = current_date + datetime.timedelta(days=1)
+            last_day_of_prev_month = date.today().replace(day=1)
+
+
+            if period == 'month':
+                stime = last_day_of_prev_month
+                etime = tomorrow
+            else:
+                stime = current_date
+                etime = tomorrow
+
+            if branch_id == 0:
+                branch_id = '1,2,3'
+            print('stime ', stime)
+            cursor.execute("""select po.order_id, sum(po.paid) sum_order
+        from piza_orders po, piza_productitem pi, piza_products pp
+        where  po.product_value=pi.id
+        and po.product_id=pp.id
+        and po.date BETWEEN '""" + str(stime) +"""' AND '""" + str(etime) +"""'
+        group by order_id
+        order by  order_id;""")
+            colomns = [i[0] for i in cursor.description]
+            order_list = [dict(zip(colomns, row)) for row in cursor]
+            order_list = sorted(order_list,
+                            key = itemgetter('order_id'))  
+
+            cursor.execute("""select di.phone, di.delivery_time, di.cre_date, di.adress, os.status_name, di.comment, di.order_id, pb.name branch_name
+        from piza_deliveryinfo di,  piza_order_status os, piza_branch pb
+        where di.cre_date BETWEEN '""" + str(stime) +"""' AND '""" + str(etime) +"""' 
+        AND di.branch_id in (""" + str(branch_id) +""")
+        and di.order_id is not null and di.status=os.id and di.branch_id=pb.id order by cre_date desc;""")
+            colomns_delivery = [i[0] for i in cursor.description]
+            delivery = [dict(zip(colomns_delivery, row)) for row in cursor]
+            merged2=[]
+            for ol in order_list:
+                merged2.append({
+                    'order_id' :ol['order_id'],
+                    'sum_order' :ol['sum_order'],
+                })
+
+            merged=[]
+            for dl in delivery:
+                merged.append({
+                    'order_id' :dl['order_id'],
+                    'branch_name' :dl['branch_name'],
+                    'cre_date' :dl['cre_date'],
+                    'adress' :dl['adress'],
+                    'comment' :dl['comment'],
+                    'delivery_time' :dl['delivery_time'],
+                    'phone' :dl['phone'],
+                    'status_name' :dl['status_name'],
+                })   
+            merged3=[]
+            for o in merged2:
+                for d in merged:
+                    if(o['order_id']==d['order_id']):
+                        merged3.append({
+                            'order_id' :d['order_id'],
+                            'adress' :d['adress'],
+                            'comment' :d['comment'],
+                            'branch_name' :d['branch_name'],
+                            'delivery_time' :d['delivery_time'],
+                            'cre_date' :d['cre_date'],
+                            'sum_order' :o['sum_order'],
+                            'status_name' :d['status_name'],
+                        })
+            if delivery ==[]: 
+                content = {
+                    "err_msg": "You didn't have orders",
+                    "err_code": -1}
+                return content
+            else:
+                content = {
+                        "order_history": sorted(merged3, key=operator.itemgetter("order_id"), reverse=True),
+                        "err_msg": "Order list",
+                        "err_code": 0}
+                return content
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_contract.post_add_contract -> " + str(sys.exc_info()[1])
+            }
 
 def post_add_orders(msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, branch_id, product):
     try:
         with connections['default'].cursor() as cursor:
-            print('msisdn ==> ', msisdn)
             cursor.execute("""select coalesce(max(order_id),0)+1 as id_orders from piza_orders;""")
             colomns_orders_id = [i[0] for i in cursor.description]
             orders_id = [dict(zip(colomns_orders_id, row)) for row in cursor]
@@ -159,7 +314,6 @@ and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 
 
             args = (
                 msisdn, delivery_status, delivery_time, delivery_address, delivery_comment, orders_id[0]['id_orders'], branch_id, o_result, o_err_msg)
-            print('args ', args)
             cursor.callproc('delivery_order', args)
             cursor.execute(
                 "select @_delivery_order_5,@_delivery_order_6,@_delivery_order_7")
@@ -330,6 +484,27 @@ def post_status_change(msisdn, order_id, status_id):
             "message":"db.add_contract.post_add_contract -> " + str(sys.exc_info()[1])
             }
 
+def post_branch_change(order_id, branch_id):
+    try:
+        with connections['default'].cursor() as cursor:
+            o_result = -1
+            o_err_msg = ""
+            args = (
+                order_id, branch_id, o_result, o_err_msg)
+            cursor.callproc('change_branch', args)
+            cursor.execute(
+                "select @_change_branch_2,@_change_branch_3;")
+            result = cursor.fetchall()
+            print(result)
+            resp = {"err_code": result[0][0],
+                "err_msg": result[0][1]}
+            return resp
+    except:
+        return {
+            "status": "error", 
+            "message":"db.add_contract.post_add_contract -> " + str(sys.exc_info()[1])
+            }
+
 
 def get_orders_list_courier(msisdn):
    with connections['default'].cursor() as cursor:
@@ -340,7 +515,7 @@ from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
 where po.order_id=pdi.order_id
 and po.product_value=pi.id
 and pdi.status=1
-and pdi.cre_date>=(NOW() - INTERVAL 7 day)
+and pdi.cre_date BETWEEN CURRENT_DATE() AND NOW()
 and po.product_id=pp.id
 group by order_id
 order by  order_id;""")
@@ -352,7 +527,7 @@ order by  order_id;""")
     cursor.execute("""select di.phone, di.delivery_time, di.cre_date, di.adress, os.status_name, di.comment, di.order_id, pb.name branch_name, di.courier
 from piza_deliveryinfo di,  piza_order_status os, piza_branch pb
 where di.order_id is not null and di.status=os.id
-and di.cre_date>=(NOW() - INTERVAL 7 day)
+and di.cre_date BETWEEN CURRENT_DATE() AND NOW()
 and di.status=1
  and di.branch_id=pb.id order by cre_date desc;""")
     colomns_delivery = [i[0] for i in cursor.description]
@@ -408,7 +583,7 @@ and di.status=1
 
 def get_orders_report_courier(msisdn):
    with connections['default'].cursor() as cursor:
-    cursor.execute("""select sum(po.paid) sum_order, count(pd.order_id) count_order from piza_orders po, piza_deliveryinfo pd 
+    cursor.execute("""select sum(po.paid) sum_order, count(distinct(pd.order_id)) count_order from piza_orders po, piza_deliveryinfo pd 
 where po.order_id=pd.order_id 
 and pd.courier=""" + str(msisdn) +"""
 and pd.status=3;""")
@@ -475,7 +650,6 @@ from piza_deliveryinfo di,  piza_order_status os, piza_branch pb
 where di.order_id is not null and di.status=os.id and di.branch_id=pb.id order by cre_date desc;""")
     colomns_delivery = [i[0] for i in cursor.description]
     delivery = [dict(zip(colomns_delivery, row)) for row in cursor]
-
     merged2=[]
     for ol in order_list:
         merged2.append({
@@ -495,7 +669,6 @@ where di.order_id is not null and di.status=os.id and di.branch_id=pb.id order b
             'phone' :dl['phone'],
             'status_name' :dl['status_name'],
         }) 
-    
     merged3=[]
     for o in merged2:
         for d in merged:

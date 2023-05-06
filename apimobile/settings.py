@@ -71,7 +71,9 @@ TEMPLATES = [
     },
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+#CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_ORIGIN_ALLOW_ALL = True
 
 WSGI_APPLICATION = 'apimobile.wsgi.application'
 
@@ -91,11 +93,13 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'paprika',
         'USER': 'admin',
-        'PASSWORD': 'admin123',
+        'PASSWORD': 'Admin!2022',
         'HOST': 'localhost',
         'PORT': '3306',
     }
 }
+
+
 
 
 # Password validation

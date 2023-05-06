@@ -89,31 +89,31 @@ def post_sent_code(phone, device_token):
             mycursor.execute("select @_generate_sms_code_8,@_generate_sms_code_9,@_generate_sms_code_10,@_generate_sms_code_11,@_generate_sms_code_12,@_generate_sms_code_13")
             result=mycursor.fetchall()
             msg=translation.gettext("Код активации")+": "+str(result[0][0])
-            print('phone===>>> ', phone)
-            print('msg===>>> ', msg)
+            # print('phone===>>> ', phone)
+            # print('msg===>>> ', msg)
             # msg= "Activation Code: "+str(result[0][0])
             resp={"exit_location_id":result[0][2],"response_id":result[0][3],"result":result[0][4],"err_msg":result[0][5]}
             if result[0][4]==0:
 
-                reqUrl = "http://my.tcell.tj/api/v1/send_sms/"
+                reqUrl = "https://my.tcell.tj/api/v1/send_sms/"
                 headersList = {
                 "Accept": "*/*",
                 "User-Agent": "Thunder Client (https://www.thunderclient.com)",
                 "Content-Type": "application/json" 
                 }
                 payload = json.dumps({
-                                        "msisdn": phone,
+                                        "msisdn": phone[-9:],
                                         "text": msg,
                                         "login":"UserSms",
                                         "pass": "!Sendsms@pass"
                                         })
                 response = requests.request("POST", reqUrl, data=payload,  headers=headersList)
 
-                resp = {
-                            "result": 0,
-                            "err_msg": "sms sent"
-                            }
-                resp["txn_id"]=result[0][1]
+            resp = {
+                        "result": 0,
+                        "err_msg": "sms sent"
+                        }
+            resp["txn_id"]=result[0][1]
             
         return resp
     except:
@@ -126,8 +126,8 @@ def post_check_sent_code(request, txn_id, sms_code):
     try:
         if txn_id == "0b3be651-1c67-11ec-9897-005056a6dd17" and sms_code == "123456":
             return {
-                "subs_id": '12345',
-                "msisdn": "992927720598",
+                "subs_id": '1234',
+                "msisdn": "992927770004",
                 "lang_id": 1,
                 "name": "Фамилия Имя Отчество",
                 "exit_location_id": "22008",
@@ -158,16 +158,18 @@ def post_check_sent_code(request, txn_id, sms_code):
             result=mycursor.fetchall()
 
 
-            mycursor.execute("""Select count(*) cnt_delivery from piza_contact_info pci where pci.phone=""" + str(result[0][2]) +""" and pci.block=99; """)
+            mycursor.execute("""Select block cnt_delivery from piza_contact_info pci where pci.phone=""" + str(result[0][2]) +""";""")
             colomns_orders_id = [i[0] for i in mycursor.description]
             delivery_cnt = [dict(zip(colomns_orders_id, row)) for row in mycursor]
+            
+            if delivery_cnt == []:
+                delivery_cnt = 1
 
-            if delivery_cnt[0]['cnt_delivery']>=1:
-                delivery = 2
             else:
-                delivery =1
+                delivery_cnt = delivery_cnt[0]['cnt_delivery']
+   
 
-            resp={"role":delivery,"msisdn":result[0][2],"lang_id":result[0][3],"name":result[0][4],"exit_location_id":result[0][5],"response_id":result[0][6],"result":result[0][7],"err_msg":result[0][8]}
+            resp={"role":delivery_cnt,"msisdn":result[0][2],"lang_id":result[0][3],"name":result[0][4],"exit_location_id":result[0][5],"response_id":result[0][6],"result":result[0][7],"err_msg":result[0][8]}
             lang_id=result[0][3]
             lang_ref={1:'ru',2:'en',3:'tg'}
             user_language=lang_ref.get(lang_id,'ru')
