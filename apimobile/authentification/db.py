@@ -89,9 +89,9 @@ def post_sent_code(phone, device_token):
             mycursor.execute("select @_generate_sms_code_8,@_generate_sms_code_9,@_generate_sms_code_10,@_generate_sms_code_11,@_generate_sms_code_12,@_generate_sms_code_13")
             result=mycursor.fetchall()
             msg=translation.gettext("Код активации")+": "+str(result[0][0])
-            # print('phone===>>> ', phone)
-            # print('msg===>>> ', msg)
-            # msg= "Activation Code: "+str(result[0][0])
+            print('phone===>>> ', phone)
+            print('msg===>>> ', msg)
+            msg= "Activation Code: "+str(result[0][0])
             resp={"exit_location_id":result[0][2],"response_id":result[0][3],"result":result[0][4],"err_msg":result[0][5]}
             if result[0][4]==0:
 
