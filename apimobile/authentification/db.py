@@ -108,7 +108,7 @@ def post_sent_code(phone, device_token):
                                         "pass": "!Sendsms@pass"
                                         })
                 response = requests.request("POST", reqUrl, data=payload,  headers=headersList)
-
+                print('resp ',response)
             resp = {
                         "result": 0,
                         "err_msg": "sms sent"

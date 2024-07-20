@@ -9,15 +9,15 @@ class ProductItemAdmin(admin.TabularInline):
     model = ProductItem
     raw_id_fields = ['product']
 
-# class ProductsAdmin(admin.ModelAdmin):
-#     list_display = ('name', 'category', 'position','status')
-#     search_fields = ('name', 'category')
-#     inlines = [ProductItemAdmin]
+class ProductsAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'position','status')
+    search_fields = ('name', 'category')
+    inlines = [ProductItemAdmin]
 
-#     list_filter = ['category']
+    list_filter = ['category']
 
 
-# admin.site.register(Products, ProductsAdmin)
+admin.site.register(Products, ProductsAdmin)
 
 class CategorysAdmin(admin.ModelAdmin):
     list_display = ('cat_name', 'position', 'comment', 'status')
@@ -31,22 +31,22 @@ class Sales_reportsAdmin(admin.ModelAdmin):
 
 admin.site.register(sales_report, Sales_reportsAdmin)
 
-# class OrderItemInline(admin.TabularInline):
-#     model = OrderItem
-#     raw_id_fields = ['product']
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    raw_id_fields = ['product']
 
-# class DeliveryAdmin(admin.TabularInline):
-#     model = DeliveryInfo
-#     raw_id_fields = ['order']
+class DeliveryAdmin(admin.TabularInline):
+    model = DeliveryInfo
+    raw_id_fields = ['order']
 
 
-# class OrdersAdmin(admin.ModelAdmin):
-#     list_display = ('phone', 'date', 'order_id')
-#     search_fields = ('phone', 'delivery_address')
-#     list_filter = ['date']
-#     inlines = [DeliveryAdmin]
+class OrdersAdmin(admin.ModelAdmin):
+    list_display = ('phone', 'date', 'order_id')
+    search_fields = ('phone', 'delivery_address')
+    list_filter = ['date']
+    #inlines = [DeliveryAdmin]
 
-# admin.site.register(orders, OrdersAdmin)
+admin.site.register(orders, OrdersAdmin)
 
 class ContacInfoAdmin(admin.ModelAdmin):
     list_display = ('phone', 'name', 'adress', 'block')
@@ -72,32 +72,3 @@ class TextMenuAdmin(admin.ModelAdmin):
     search_fields = ('id', 'text')
 
 admin.site.register(menu_text, TextMenuAdmin)
-
-
-class ProductsAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'status', 'time_preparing')
-    list_filter = ('category', 'status',)
-    search_fields = ('name', 'category__name',)
-    
-class OrdersAdmin(admin.ModelAdmin):
-    list_display = ('order_id', 'phone', 'product', 'date', 'adress', 'paid', 'order_details')
-    list_filter = ('date', 'product',)
-    search_fields = ('order_id', 'phone',)
-    ordering = ('-order_id',)
-
-    def product(self, obj):
-        return obj.product.name
-
-    def order_details(self, obj):
-        url = reverse('admin:order_detail', args=[obj.order_id])
-        return format_html("<a href='{}'>Подробнее</a>".format(url))
-
-class DeliveryInfoAdmin(admin.ModelAdmin):
-    list_display = ('order', 'delivery_time', 'adress', 'comment', 'cre_date', 'courier', 'status')
-    list_filter = ('status', 'courier', 'cre_date',)
-    search_fields = ('order__order_id', 'phone',)
-    ordering = ('-cre_date',)
-
-admin.site.register(Products, ProductsAdmin)
-admin.site.register(orders, OrdersAdmin)
-admin.site.register(DeliveryInfo, DeliveryInfoAdmin)

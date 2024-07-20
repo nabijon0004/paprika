@@ -70,8 +70,10 @@ def get_orders_list(msisdn):
    with connections['default'].cursor() as cursor:
     i_msisdn = msisdn
     cursor.execute("""select po.order_id, sum(po.paid) sum_order
-from piza_orders po
+from piza_orders po, piza_productitem pi, piza_products pp
 where po.phone=""" + str(msisdn) +"""
+and po.product_value=pi.id
+and po.product_id=pp.id
 group by order_id
 order by  order_id;""")
     colomns = [i[0] for i in cursor.description]
@@ -359,10 +361,12 @@ select max(pi2.id) from piza_contact_info pi2 where pi2.phone=pi.phone);""")
 
 def post_order_detail(msisdn, order_id):
     try:
+        print('order_id ', order_id)
         with connections['default'].cursor() as cursor:
             cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, po.product_value volume_name, pp.id as product_id, pp.name, pd.branch_id, CONCAT('media/', pp.image) as image
-from piza_orders po, piza_products pp, piza_deliveryinfo pd
+from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
 where po.phone=""" + str(msisdn) +"""
+and pp.id=pi.id
 and po.order_id=pd.order_id
 and po.order_id = """ + str(order_id) +"""
 and po.product_id=pp.id
@@ -391,7 +395,7 @@ def post_order_detail_courier(msisdn, order_id):
         with connections['default'].cursor() as cursor:
             cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, po.product_value volume_name, pp.id as product_id, pp.name, pd.courier, pd.branch_id, CONCAT('media/', pp.image) as image
 from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
-where po.product_value=pi.id
+where pp.id=pi.id
 and po.order_id=pd.order_id
 and po.order_id = """ + str(order_id) +"""
 and po.product_id=pp.id
