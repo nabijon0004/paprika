@@ -165,7 +165,8 @@ def post_check_sent_code(request, txn_id, sms_code):
             resp['err_msg']=translation.gettext(resp['err_msg'])
             resp['err_msg']=resp['err_msg']
             resp["auth_token"]=result[0][0]
-        return resp 
+            print('resp ', resp)
+        return resp
 
 
     except:

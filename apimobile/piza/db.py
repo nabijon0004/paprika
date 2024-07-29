@@ -72,7 +72,7 @@ def get_orders_list(msisdn):
     cursor.execute("""select po.order_id, sum(po.paid) sum_order
 from piza_orders po, piza_productitem pi, piza_products pp
 where po.phone=""" + str(msisdn) +"""
-and po.product_value=pi.id
+and po.product_id=pi.id
 and po.product_id=pp.id
 group by order_id
 order by  order_id;""")
@@ -138,7 +138,6 @@ def post_report_list(period, branch_id):
             current_date = datetime.date.today()
             tomorrow = current_date + datetime.timedelta(days=1)
             last_day_of_prev_month = date.today().replace(day=1)
-
             if period == 'month':
                 stime = last_day_of_prev_month
                 etime = tomorrow
@@ -220,7 +219,7 @@ def post_report_order_list(period, branch_id):
             print('stime ', stime)
             cursor.execute("""select po.order_id, sum(po.paid) sum_order
         from piza_orders po, piza_productitem pi, piza_products pp
-        where  po.product_value=pi.id
+        where  po.product_id=pi.id
         and po.product_id=pp.id
         and po.date BETWEEN '""" + str(stime) +"""' AND '""" + str(etime) +"""'
         group by order_id
@@ -521,7 +520,7 @@ and pdi.cre_date BETWEEN CURRENT_DATE() AND NOW()
 and po.product_id=pp.id
 group by order_id
 order by  order_id;""")
-    colomns = [i[0] for i in cursor.description]
+    colomns = [i[0] for i in cursor.description]   
     order_list = [dict(zip(colomns, row)) for row in cursor]
     order_list = sorted(order_list,
                     key = itemgetter('order_id'))                        
@@ -637,7 +636,7 @@ def get_orders_list_kitchens(request):
    with connections['default'].cursor() as cursor:
     cursor.execute("""select po.order_id, sum(po.paid) sum_order
 from piza_orders po, piza_productitem pi, piza_products pp
-where po.product_value=pi.id
+where po.product_id=pi.id
 and po.order_id>=225
 and po.product_id=pp.id
 group by order_id
