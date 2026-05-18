@@ -216,7 +216,7 @@ def post_report_order_list(period, branch_id):
 
             if branch_id == 0:
                 branch_id = '1,2,3'
-            print('stime ', stime)
+            
             cursor.execute("""select po.order_id, sum(po.paid) sum_order
         from piza_orders po, piza_productitem pi, piza_products pp
         where  po.product_id=pi.id
@@ -300,6 +300,7 @@ and ac1.cre_dt = (Select max(ac2.cre_dt) from auth_code ac2 where ac2.stat_id=3 
             token_device = [dict(zip(colomns_orders_id, row)) for row in cursor]
             o_result = -1
             o_err_msg = ""
+
             for i in range(len(product)):
                 args = (
                     msisdn, product[i]['product_id'], product[i]['count'], product[i]['paid'], product[i]['value'], orders_id[0]['id_orders'], o_result, o_err_msg)
@@ -360,7 +361,7 @@ select max(pi2.id) from piza_contact_info pi2 where pi2.phone=pi.phone);""")
 
 def post_order_detail(msisdn, order_id):
     try:
-        print('order_id ', order_id)
+
         with connections['default'].cursor() as cursor:
             cursor.execute("""select po.order_id, po.phone, po.date, po.paid, po.count, po.product_value volume_name, pp.id as product_id, pp.name, pd.branch_id, CONCAT('media/', pp.image) as image
 from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pd
@@ -425,7 +426,7 @@ def post_add_contract(msisdn, name, adress):
             o_err_msg = ""
             args = (
                 msisdn, name, adress, o_result, o_err_msg)
-            print(args)
+
             cursor.callproc('add_contact', args)
             cursor.execute(
                 "select @_add_contact_3,@_add_contact_4;")
@@ -514,7 +515,7 @@ def get_orders_list_courier(msisdn):
 select po.order_id, sum(po.paid) sum_order
 from piza_orders po, piza_productitem pi, piza_products pp, piza_deliveryinfo pdi
 where po.order_id=pdi.order_id
-and po.product_value=pi.id
+and po.product_id=pi.id
 and pdi.status=1
 and pdi.cre_date BETWEEN CURRENT_DATE() AND NOW()
 and po.product_id=pp.id
