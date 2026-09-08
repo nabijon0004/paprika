@@ -7,7 +7,7 @@ def generate_refresh(phone: str):
     dt = timezone.now() + timezone.timedelta(days = 30)
     token = jwt.encode({
             'number': phone,
-            'exp': int(dt.strftime('%s'))
+            'exp': int(dt.timestamp())
         }, settings.SECRET_KEY, algorithm='HS256')
     return token
 
@@ -15,7 +15,7 @@ def generate_access(phone: str):
     dt = datetime.now() + timedelta(minutes = 600)
     token = jwt.encode({
             'phone': phone,
-            'exp': int(dt.strftime('%s'))
+            'exp': int(dt.timestamp())
         }, settings.SECRET_KEY, algorithm='HS256')
     return token
 
@@ -23,7 +23,7 @@ def generate_stt(otp: int):
     dt = datetime.now() + timedelta(minutes = 8)
     token = jwt.encode({
             'otp': otp,
-            'exp': int(dt.strftime('%s'))
+            'exp': int(dt.timestamp())
         }, settings.SECRET_KEY, algorithm='HS256')
     return token
 

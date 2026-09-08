@@ -7,6 +7,16 @@ from django.utils import translation
 from .db import verify_auth_token
 from authentification import token as JWT
 
+
+def get_IMSI_by_MSISDN(msisdn):
+    """
+    Stub for IMSI lookup (the lookup service was never implemented).
+    Returns an empty list so check_access falls through to 'no access'
+    instead of crashing with NameError.
+    """
+    return []
+
+
 def check_access(*args, **kwargs):
     """
     Cheacking access with comparing MSISDN and IMSI
@@ -50,6 +60,11 @@ def check_token(*args, **kwargs):
         r = verify_auth_token(token)
         if 'msisdn' in r.keys():
             return True, r['msisdn'], token
+        # Fallback: mobile app authenticates via JWT access-token
+        # (otp -> verify flow), which is not stored in MySQL.
+        decoded = JWT.decode(token)
+        if decoded.get('success') and decoded.get('phone'):
+            return True, decoded['phone'], token
         return False, False, False
 
 def auth_required(token_only):

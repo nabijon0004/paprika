@@ -1,5 +1,4 @@
 import datetime
-from distutils.command import upload
 from tabnanny import verbose
 from django.db import models
 from .db import post_pizaproduct_order, get_orders_list, post_report_list, post_add_orders, get_profil_list, post_order_detail, post_add_contract, post_pick_up, get_orders_list_courier, post_order_detail_courier, post_status_change, get_orders_report_courier, post_push_courier, get_orders_list_kitchens, post_branch_change, post_report_order_list
