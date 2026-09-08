@@ -1,64 +1,105 @@
 """
 All connection with db
 """
-from copy import Error
-import sys
-from django.db import connections
-#from utils.db import dictfetchall
-from django.utils import translation
-#from authentification.kannelSMS import sendSMS
+import logging
+
 import requests
-import json
-        
+from django.db import connections, DatabaseError
+from django.utils import translation
+
+from authentification.kannelSMS import sendSMS
+
+logger = logging.getLogger(__name__)
+
+_LANG_REF = {1: 'ru', 2: 'en', 3: 'tg'}
+_DB_ERROR_MESSAGE = "Error occurred while processing your request"
+
+
+def _call_proc(cursor, proc_name, args, out_count):
+    """
+    Call a stored procedure and return a row with its OUT parameters.
+
+    MySQL exposes OUT parameters of the last callproc as session
+    variables named @_<proc_name>_<index>.
+    """
+    cursor.callproc(proc_name, args)
+    out_vars = ",".join(
+        f"@_{proc_name}_{i}" for i in range(len(args) - out_count, len(args))
+    )
+    cursor.execute(f"SELECT {out_vars}")
+    return cursor.fetchone()
+
+
+def _db_error_response(marker, exc):
+    """Build a response dict for MySQL errors (marker: 88888 / 88886)."""
+    err_code = exc.args[0] if len(exc.args) > 0 else marker
+    err_msg = exc.args[1] if len(exc.args) > 1 else str(exc)
+    return {
+        "exit_location_id": marker,
+        "response_id": marker,
+        "result": -marker,
+        "err_msg": _DB_ERROR_MESSAGE,
+        "exception_source": "mysql",
+        "exception_err_code": err_code,
+        "exception_err_msg": err_msg,
+    }
+
+
+def _error_response(func_name, exc):
+    logger.error("authentification.db.%s -> %s", func_name, exc)
+    return {
+        "status": "error",
+        "message": f"authentification.db.{func_name} -> {exc}",
+    }
+
+
+def _send_activation_sms(phone, sms_code):
+    """Send activation code via the Tcell SMS gateway."""
+    msg = "Activation Code: " + str(sms_code)
+    logger.debug("phone===>>> %s", phone)
+    logger.debug("msg===>>> %s", msg)
+    req_url = "https://my.tcell.tj/api/v1/send_sms/"
+    headers = {
+        "Accept": "*/*",
+        "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "msisdn": phone[-9:],
+        "text": msg,
+        "login": "UserSms",
+        "pass": "!Sendsms@pass",
+    }
+    response = requests.post(req_url, json=payload, headers=headers, timeout=10)
+    logger.debug("sms gateway resp %s", response)
+
+
 def verify_auth_token(token):
     try:
         with connections['default'].cursor() as mycursor:
-            auth_token = token
-            request_id = 1222
-            client_app_type = 'Web'
-            client_app_version = 1
-            o_subs_id = 0
-            o_msisdn = ""
-            o_lang_id = 0
-            o_exit_location_id3 = ""
-            o_responce_id3 = 0
-            o_result3 = -1
-            o_err_msg3 = ""
-            remote_address = "127.0.0.1" #request.META.get('REMOTE_ADDR')
             args = (
-                auth_token, remote_address, request_id, client_app_type, client_app_version, o_subs_id,
-                o_msisdn,
-                o_lang_id, o_exit_location_id3, o_responce_id3, o_result3, o_err_msg3)
+                token, "127.0.0.1", 1222, 'Web', 1, 0,
+                "", 0, "", 0, -1, "",
+            )
             try:
-                mycursor.callproc('verify_auth_token', args)
-                mycursor.execute(
-                    "select @_verify_auth_token_5,@_verify_auth_token_6,@_verify_auth_token_7,@_verify_auth_token_8,@_verify_auth_token_9,@_verify_auth_token_10,@_verify_auth_token_11")
-                result = mycursor.fetchall()
-                resp = {"exit_location_id": result[0][3], "responce_id": result[0][4], "result": result[0][5],
-                        "err_msg": result[0][6]}
-                lang_ref = {1: 'ru', 2: 'en', 3: 'tg'}
-                user_language = lang_ref.get(result[0][2], 'ru')
-                translation.activate(user_language)
+                result = _call_proc(mycursor, 'verify_auth_token', args, 7)
+                resp = {
+                    "exit_location_id": result[3],
+                    "responce_id": result[4],
+                    "result": result[5],
+                    "err_msg": result[6],
+                }
+                translation.activate(_LANG_REF.get(result[2], 'ru'))
                 resp['err_msg'] = translation.gettext(resp['err_msg'])
-                resp['err_msg'] = resp['err_msg']
-                if (result[0][5] == 0):
-                    resp["subs_id"] = result[0][0]
-                    resp["msisdn"] = result[0][1]
-                    resp["lang_id"] = result[0][2]
+                if result[5] == 0:
+                    resp["subs_id"] = result[0]
+                    resp["msisdn"] = result[1]
+                    resp["lang_id"] = result[2]
                 return resp
-            except Error as e:
-                error = e.args
-                resp = {"exit_location_id": 88888, "response_id": 88888, "result": -88888,
-                        "err_msg": "Error occurred while processing your request", "exception_source": 'mysql',
-                        "exception_err_code": error[0], "exception_err_msg": error[1]}
-                return resp
-
-    except:
-        print("[ERROR] authentification.db.verify_auth_token -> "+ str(sys.exc_info()[1]))
-        return {
-            "status": "error", 
-            "message":"authentification.db.verify_auth_token -> " + str(sys.exc_info()[1])
-            }
+            except DatabaseError as e:
+                return _db_error_response(88888, e)
+    except Exception as e:
+        return _error_response('verify_auth_token', e)
 
 def post_sent_code(phone, device_token):
     try:
@@ -71,157 +112,89 @@ def post_sent_code(phone, device_token):
                 "txn_id": "0b3be651-1c67-11ec-9897-005056a6dd17"
                 }
         with connections['default'].cursor() as mycursor:
-            
-            subs_id=1
-            lang_id=3
-            name='Тестов Тест'
-            request_id=1222
-            client_app_version=1
-            o_sms_code=0
-            o_txn_id=""
-            o_exit_location_id2=""
-            o_responce_id2=0
-            o_result2=-1
-            o_err_msg2=""
-            remote_address = "127.0.0.1" #request.META.get('REMOTE_ADDR')
-            args = (phone,subs_id,lang_id,name,remote_address,request_id,device_token,client_app_version, o_sms_code, o_txn_id,o_exit_location_id2, o_responce_id2, o_result2, o_err_msg2)
-            mycursor.callproc('generate_sms_code', args)
-            mycursor.execute("select @_generate_sms_code_8,@_generate_sms_code_9,@_generate_sms_code_10,@_generate_sms_code_11,@_generate_sms_code_12,@_generate_sms_code_13")
-            result=mycursor.fetchall()
-            msg=translation.gettext("Код активации")+": "+str(result[0][0])
-            print('phone===>>> ', phone)
-            print('msg===>>> ', msg)
-            msg= "Activation Code: "+str(result[0][0])
-            resp={"exit_location_id":result[0][2],"response_id":result[0][3],"result":result[0][4],"err_msg":result[0][5]}
-            if result[0][4]==0:
-
-                reqUrl = "https://my.tcell.tj/api/v1/send_sms/"
-                headersList = {
-                "Accept": "*/*",
-                "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-                "Content-Type": "application/json" 
-                }
-                payload = json.dumps({
-                                        "msisdn": phone[-9:],
-                                        "text": msg,
-                                        "login":"UserSms",
-                                        "pass": "!Sendsms@pass"
-                                        })
-                response = requests.request("POST", reqUrl, data=payload,  headers=headersList)
-
-            resp = {
-                        "result": 0,
-                        "err_msg": "sms sent"
-                        }
-            resp["txn_id"]=result[0][1]
-            
-        return resp
-    except:
-        return {
-            "status": "error", 
-            "message":"authentification.db.post_sent_code -> " + str(sys.exc_info()[1])
+            args = (
+                phone, 1, 3, 'Тестов Тест', "127.0.0.1", 1222,
+                device_token, 1, 0, "", "", 0, -1, "",
+            )
+            result = _call_proc(mycursor, 'generate_sms_code', args, 6)
+            if result[4] == 0:
+                _send_activation_sms(phone, result[0])
+            return {
+                "result": 0,
+                "err_msg": "sms sent",
+                "txn_id": result[1],
             }
+    except Exception as e:
+        return _error_response('post_sent_code', e)
 
 def post_check_sent_code(request, txn_id, sms_code):
     try:
         with connections['default'].cursor() as mycursor:
-            
-            request_id=1222
-            device_token=""
-            client_app_version=1
-            lang_id=1
-            o_auth_token=""
-            o_subs_id=0
-            o_msisdn=""
-            o_lang_id=1
-            o_name=""
-            o_exit_location_id=""
-            o_responce_id=0
-            o_result=0
-            o_err_msg=""
-            args = (txn_id,sms_code,request.META.get('REMOTE_ADDR'),request_id,device_token,client_app_version, o_auth_token,o_subs_id,o_msisdn,o_lang_id,o_name,o_exit_location_id, o_responce_id, o_result, o_err_msg)
-            mycursor.callproc('verify_sms_code', args)
-            mycursor.execute("select @_verify_sms_code_6,@_verify_sms_code_7,@_verify_sms_code_8,@_verify_sms_code_9,@_verify_sms_code_10,@_verify_sms_code_11,@_verify_sms_code_12,@_verify_sms_code_13,@_verify_sms_code_14")
-            result=mycursor.fetchall()
-            
+            args = (
+                txn_id, sms_code, request.META.get('REMOTE_ADDR'), 1222, "", 1,
+                "", 0, "", 1, "", "", 0, 0, "",
+            )
+            result = _call_proc(mycursor, 'verify_sms_code', args, 9)
 
-            mycursor.execute("""Select block cnt_delivery from piza_contact_info pci where pci.phone=""" + str(result[0][2]) +""";""")
-            colomns_orders_id = [i[0] for i in mycursor.description]
-            delivery_cnt = [dict(zip(colomns_orders_id, row)) for row in mycursor]
-            
-            if delivery_cnt == []:
-                delivery_cnt = 1
+            mycursor.execute(
+                "SELECT block cnt_delivery FROM piza_contact_info pci WHERE pci.phone = %s",
+                (result[2],),
+            )
+            row = mycursor.fetchone()
+            delivery_cnt = row[0] if row else 1
 
-            else:
-                delivery_cnt = delivery_cnt[0]['cnt_delivery']
-   
-
-            resp={"role":delivery_cnt,"msisdn":result[0][2],"lang_id":result[0][3],"name":result[0][4],"exit_location_id":result[0][5],"response_id":result[0][6],"result":result[0][7],"err_msg":result[0][8]}
-            lang_id=result[0][3]
-            lang_ref={1:'ru',2:'en',3:'tg'}
-            user_language=lang_ref.get(lang_id,'ru')
-            resp['lang'] = user_language
+            lang_id = result[3]
+            user_language = _LANG_REF.get(lang_id, 'ru')
             translation.activate(user_language)
-            resp['err_msg']=translation.gettext(resp['err_msg'])
-            resp['err_msg']=resp['err_msg']
-            resp["auth_token"]=result[0][0]
-        return resp 
-
-
-    except:
-        return {
-            "status": "error", 
-            "message":"authentification.db.post_check_sent_code -> " + str(sys.exc_info()[1])
+            resp = {
+                "role": delivery_cnt,
+                "msisdn": result[2],
+                "lang_id": lang_id,
+                "name": result[4],
+                "exit_location_id": result[5],
+                "response_id": result[6],
+                "result": result[7],
+                "err_msg": translation.gettext(result[8]),
+                "lang": user_language,
+                "auth_token": result[0],
             }
+            logger.debug("resp %s", resp)
+            return resp
+    except Exception as e:
+        return _error_response('post_check_sent_code', e)
 
 def post_logout(request):
     try:
         token = request.META.get('HTTP_AUTH_TOKEN', "")
         with connections['default'].cursor() as mycursor:
-            request_id = 1222
-            client_app_type = 'Web'
-            client_app_version = 1
-            o_subs_id = 0
-            o_msisdn = ""
-            o_lang_id = 0
-            o_exit_location_id3 = ""
-            o_responce_id3 = 0
-            o_result3 = -1
-            o_err_msg3 = ""
-
-            args = (token, request.META.get('REMOTE_ADDR'), request_id, client_app_type, client_app_version,
-                    o_exit_location_id3, o_responce_id3, o_result3, o_err_msg3)
+            args = (
+                token, request.META.get('REMOTE_ADDR'), 1222, 'Web', 1,
+                "", 0, -1, "",
+            )
             try:
-                mycursor.callproc('logoff', args)
-                mycursor.execute("select @_logoff_5,@_logoff_6,@_logoff_7,@_logoff_8")
-                result = mycursor.fetchall()
-                resp = {"exit_location_id": result[0][0], "responce_id": result[0][1], "result": result[0][2],
-                        "err_msg": result[0][3]}
-                return resp
-            except Error as e:
-                error = e.args
-                resp = {"exit_location_id": 88886, "response_id": 88886, "result": -88886,
-                        "err_msg": "Error occurred while processing your request", "exception_source": 'mysql',
-                        "exception_err_code": error[0], "exception_err_msg": error[1]}
-                return resp
-    except:
-        return {
-            "status": "error", 
-            "message":"authentification.db.post_logout -> " + str(sys.exc_info()[1])
-            }
+                result = _call_proc(mycursor, 'logoff', args, 4)
+                return {
+                    "exit_location_id": result[0],
+                    "responce_id": result[1],
+                    "result": result[2],
+                    "err_msg": result[3],
+                }
+            except DatabaseError as e:
+                return _db_error_response(88886, e)
+    except Exception as e:
+        return _error_response('post_logout', e)
 
 def send_sms(msisdn: str, text: str):
     try:
-        if sendSMS(str(msisdn),text):
-            resp = {
-                    "result": 0,
-                    "err_msg": "sms sent"
-                    }
-        else:
-            resp = {
-                    "result": -1,
-                    "err_msg": "sms sent error"
-                    }
-        return resp
-    except:
+        if sendSMS(str(msisdn), text):
+            return {
+                "result": 0,
+                "err_msg": "sms sent"
+                }
+        return {
+            "result": -1,
+            "err_msg": "sms sent error"
+            }
+    except Exception as e:
+        logger.error("authentification.db.send_sms -> %s", e)
         return False

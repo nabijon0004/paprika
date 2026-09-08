@@ -466,15 +466,3 @@ def index(request):
     #     res +=f'<div><h3>{ order.order_id }</h3><div>{ order.date }</div></div><hr>'
     # return HttpResponse(res)
     return render(request, 'reports/index.html', {'orders': orders_list})
-
-
-from django.shortcuts import render, get_object_or_404
-from .models import orders, Products
-
-def order_detail(request, order_id):
-    order = get_object_or_404(orders, order_id=order_id)
-    context = {
-        'order': order,
-        'products': order.product.values()
-    }
-    return render(request, 'order_detail.html', context)

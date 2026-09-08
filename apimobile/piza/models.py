@@ -1,5 +1,4 @@
 import datetime
-from distutils.command import upload
 from tabnanny import verbose
 from django.db import models
 from .db import post_pizaproduct_order, get_orders_list, post_report_list, post_add_orders, get_profil_list, post_order_detail, post_add_contract, post_pick_up, get_orders_list_courier, post_order_detail_courier, post_status_change, get_orders_report_courier, post_push_courier, get_orders_list_kitchens, post_branch_change, post_report_order_list
@@ -170,8 +169,8 @@ class orders(models.Model):
         return sum(item.get_cost() for item in self.items.all())
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(orders, related_name='order_items', on_delete=models.PROTECT)
-    product = models.ForeignKey(Products, related_name='order_items', on_delete=models.CASCADE)
+    order = models.ForeignKey(orders, related_name='items', on_delete=models.PROTECT)
+    product = models.ForeignKey(Products, related_name='order_items', on_delete=models.PROTECT)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(default=1)
 
@@ -203,8 +202,9 @@ class DeliveryInfo(models.Model):
         (4, 'Отказ'),
     )
     status = models.IntegerField(verbose_name='Статус', choices=STATUS)
-    delivery_etime = models.DateTimeField(verbose_name='Время доставки', null=True)
-    order = models.OneToOneField(orders, related_name='InfoDelivery', on_delete=models.PROTECT)
+    delivery_etime = models.DateTimeField(verbose_name='Время доставки', max_length=15)
+    #order_id = models.IntegerField(verbose_name='ID заказ')
+    order = models.ForeignKey(orders, related_name='InfoDelivery', on_delete=models.PROTECT)
 
 class courier(models.Model):
     courier_phone = models.CharField(verbose_name='Телефон курьера', max_length=12, null=True)
