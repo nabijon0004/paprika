@@ -1,0 +1,120 @@
+{% extends "admin/base_site.html" %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .rep-filters { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end;
+                 margin-bottom: 16px; padding: 12px 14px; border: 1px solid var(--hairline-color);
+                 background: var(--darkened-bg); border-radius: 4px; }
+  .rep-filters label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+                       color: var(--body-quiet-color); margin-bottom: 3px; }
+  .rep-filters input, .rep-filters select { min-width: 150px; height: 30px; box-sizing: border-box; }
+  .rep-filters .rep-actions { display: flex; gap: 8px; align-items: center; }
+  .rep-summary { margin: 0 0 12px; color: var(--body-quiet-color); }
+  .rep-summary b { color: var(--body-fg); }
+  .rep-table { width: 100%; }
+  .rep-table th a { color: inherit; text-decoration: none; white-space: nowrap; }
+  .rep-table th a:hover { text-decoration: underline; }
+  .rep-table td.num, .rep-table th.num { text-align: right; white-space: nowrap; }
+  .rep-items { margin: 0; padding-left: 16px; color: var(--body-quiet-color); font-size: 12px; }
+  .rep-muted { color: var(--body-quiet-color); }
+  .rep-pager { display: flex; gap: 14px; align-items: center; margin-top: 14px; }
+  .rep-pager .disabled { color: var(--body-quiet-color); opacity: .5; }
+  .rep-scroll { overflow-x: auto; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Главная</a> &rsaquo;
+  <a href="{% url 'admin:app_list' 'piza' %}">Piza</a> &rsaquo;
+  <a href="{% url 'admin:piza_orders_changelist' %}">Заказы</a> &rsaquo;
+  Отчёт по заказам
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <form method="get" class="rep-filters">
+    <div>
+      <label for="f-q">Поиск по телефону</label>
+      <input id="f-q" type="search" name="q" value="{{ filters.q }}" placeholder="992927770004" inputmode="tel">
+    </div>
+    <div>
+      <label for="f-client">Клиент</label>
+      <select id="f-client" name="client">
+        <option value="">Все клиенты</option>
+        {% for c in clients %}
+          <option value="{{ c.phone }}"{% if c.phone == filters.client %} selected{% endif %}>{% if c.name %}{{ c.name }} · {% endif %}{{ c.phone }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="f-courier">Курьер</label>
+      <select id="f-courier" name="courier">
+        <option value="">Все курьеры</option>
+        <option value="{{ no_courier }}"{% if filters.courier == no_courier %} selected{% endif %}>Без курьера</option>
+        {% for c in couriers %}
+          <option value="{{ c.phone }}"{% if c.phone == filters.courier %} selected{% endif %}>{% if c.name %}{{ c.name }} · {% endif %}{{ c.phone }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="f-from">Дата с</label>
+      <input id="f-from" type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div>
+      <label for="f-to">Дата по</label>
+      <input id="f-to" type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ direction }}">
+    <div class="rep-actions">
+      <input type="submit" class="default" value="Применить">
+      {% if has_filters %}<a href="?sort={{ sort }}&amp;dir={{ direction }}">Сбросить</a>{% endif %}
+    </div>
+  </form>
+
+  <p class="rep-summary">
+    Заказов: <b>{{ summary.cnt }}</b> · Сумма: <b>{{ summary.total }}</b>
+    {% if pages > 1 %}· Страница {{ page }} из {{ pages }}{% endif %}
+  </p>
+
+  <div class="rep-scroll">
+  <table class="rep-table">
+    <thead>
+      <tr>
+        {% for h in headers %}
+          <th{% if h.label == 'Сумма' %} class="num"{% endif %}><a href="{{ h.url }}">{{ h.label }} {{ h.arrow }}</a></th>
+        {% endfor %}
+        <th>Состав</th>
+        <th>Адрес доставки</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="{% url 'admin:piza_orders_changelist' %}?q={{ r.order_id }}">{{ r.order_id }}</a></td>
+        <td>{{ r.order_date|date:"d.m.Y H:i" }}</td>
+        <td>{% if r.client_name %}{{ r.client_name }}{% else %}<span class="rep-muted">-</span>{% endif %}</td>
+        <td>{{ r.phone }}</td>
+        <td>{% if r.courier %}{% if r.courier_name %}{{ r.courier_name }}<br>{% endif %}<span class="rep-muted">{{ r.courier }}</span>{% else %}<span class="rep-muted">-</span>{% endif %}</td>
+        <td>{% if r.status_name %}{{ r.status_name }}{% else %}<span class="rep-muted">-</span>{% endif %}</td>
+        <td class="num">{{ r.total }}</td>
+        <td>{% if r.items %}<ul class="rep-items">{% for i in r.items %}<li>{{ i }}</li>{% endfor %}</ul>{% endif %}</td>
+        <td>{% if r.adress %}{{ r.adress }}{% else %}<span class="rep-muted">{% if r.status_name %}Самовывоз{% else %}-{% endif %}</span>{% endif %}{% if r.branch_name %}<br><span class="rep-muted">{{ r.branch_name }}</span>{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" class="rep-muted">По выбранным условиям заказов не найдено.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  {% if pages > 1 %}
+  <div class="rep-pager">
+    {% if prev_url %}<a href="{{ prev_url }}">&larr; Назад</a>{% else %}<span class="disabled">&larr; Назад</span>{% endif %}
+    <span>{{ page }} / {{ pages }}</span>
+    {% if next_url %}<a href="{{ next_url }}">Вперёд &rarr;</a>{% else %}<span class="disabled">Вперёд &rarr;</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

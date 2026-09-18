@@ -1,4 +1,8 @@
 from django.contrib import admin
+from django.urls import path, reverse
+from django.utils.html import format_html
+
+from .order_report import order_report
 
 # Register your models here.
 
@@ -85,12 +89,21 @@ class OrdersAdmin(admin.ModelAdmin):
     search_fields = ('order_id', 'phone',)
     ordering = ('-order_id',)
 
+    def get_urls(self):
+        custom = [
+            path('report/', self.admin_site.admin_view(self.report_view), name='piza_orders_report'),
+        ]
+        return custom + super().get_urls()
+
+    def report_view(self, request):
+        return order_report(request, self.admin_site.each_context(request), self.has_view_permission(request))
+
     def product(self, obj):
-        return obj.product.name
+        return obj.product.name if obj.product else '-'
 
     def order_details(self, obj):
-        url = reverse('admin:order_detail', args=[obj.order_id])
-        return format_html("<a href='{}'>Подробнее</a>".format(url))
+        url = reverse('admin:piza_orders_change', args=[obj.pk])
+        return format_html("<a href='{}'>Подробнее</a>", url)
 
 class DeliveryInfoAdmin(admin.ModelAdmin):
     list_display = ('order', 'delivery_time', 'adress', 'comment', 'cre_date', 'courier', 'status')
