@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='deliveryinfo',
             name='delivery_etime',
-            field=models.DateTimeField(default=1, max_length=15, verbose_name='Время доставки'),
+            field=models.DateTimeField(default='2022-11-30 15:55:00+00:00', max_length=15, verbose_name='Время доставки'),
             preserve_default=False,
         ),
         migrations.AlterField(
