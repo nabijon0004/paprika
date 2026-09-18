@@ -64,7 +64,7 @@ def auth_required(token_only):
             has_access, msisdn, auth_token = check_token(*args, **kwargs)
             kwargs['msisdn'] = msisdn
             if token_only:
-                kwargs['auth_token'] = auth_token
+                kwargs['auth-token'] = auth_token
             if not has_access and not token_only:
                 # check token, msisdn and imsi
                 has_access, msisdn = check_access(*args, **kwargs)

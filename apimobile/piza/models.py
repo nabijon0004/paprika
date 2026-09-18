@@ -242,6 +242,7 @@ class contact_info(models.Model):
 
 @auth_required(token_only=False)
 def orders_list(request, msisdn):
+    print(f"Fetching orders list for msisdn: {msisdn}")
     return get_orders_list(msisdn)
 
 @auth_required(token_only=False)
