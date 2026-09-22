@@ -30,6 +30,21 @@ services:
       DB_NAME: paprika
       DB_USER: admin
       DB_PASSWORD: Admin!2022
+      SMS_ENABLED: "false"
+      # значения берутся из файла .env рядом с docker-compose.yml (см. .env.example)
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-mypaprika.net,www.mypaprika.net,web,localhost,127.0.0.1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FCM_SERVER_KEY: ${FCM_SERVER_KEY}
+      SMS_LOGIN: ${SMS_LOGIN}
+      SMS_PASSWORD: ${SMS_PASSWORD}
+      KANNEL_USER: ${KANNEL_USER}
+      KANNEL_PASSWORD: ${KANNEL_PASSWORD}
+      DEV_TEST_MSISDN: ${DEV_TEST_MSISDN}
+      DEV_TEST_TOKEN: ${DEV_TEST_TOKEN}
+      DEV_AUTH_TOKEN: ${DEV_AUTH_TOKEN}
+      DEV_AUTH_MSISDN: ${DEV_AUTH_MSISDN}
     command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn apimobile.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile -"
     ports:
       - "8000:8000"

@@ -1,15 +1,24 @@
 """
-All connection with db
+Доступ к БД авторизации: хранимые процедуры и отправка SMS.
 """
-from copy import Error
-import sys
-from django.db import connections
-#from utils.db import dictfetchall
-from django.utils import translation
-#from authentification.kannelSMS import sendSMS
-import requests
 import json
-        
+import logging
+import os
+import sys
+
+import requests
+from django.db import connections
+from django.utils import translation
+
+from authentification.kannelSMS import sendSMS
+
+logger = logging.getLogger(__name__)
+
+SMS_URL = os.environ.get("SMS_GATEWAY_URL", "https://my.tcell.tj/api/v1/send_sms/")
+SMS_LOGIN = os.environ.get("SMS_LOGIN", "")
+SMS_PASSWORD = os.environ.get("SMS_PASSWORD", "")
+SMS_TIMEOUT = (3, 10)
+
 def verify_auth_token(token):
     try:
         with connections['default'].cursor() as mycursor:
@@ -46,23 +55,27 @@ def verify_auth_token(token):
                     resp["msisdn"] = result[0][1]
                     resp["lang_id"] = result[0][2]
                 return resp
-            except Error as e:
-                error = e.args
-                resp = {"exit_location_id": 88888, "response_id": 88888, "result": -88888,
-                        "err_msg": "Error occurred while processing your request", "exception_source": 'mysql',
-                        "exception_err_code": error[0], "exception_err_msg": error[1]}
-                return resp
+            except Exception as exc:
+                logger.exception("[ERROR] authentification.db.verify_auth_token (proc)")
+                return {"exit_location_id": 88888, "response_id": 88888, "result": -88888,
+                        "err_msg": "Error occurred while processing your request",
+                        "exception_source": 'mysql', "exception_err_msg": str(exc)}
 
-    except:
-        print("[ERROR] authentification.db.verify_auth_token -> "+ str(sys.exc_info()[1]))
+    except Exception:
+        logger.exception("[ERROR] authentification.db.verify_auth_token")
         return {
             "status": "error", 
             "message":"authentification.db.verify_auth_token -> " + str(sys.exc_info()[1])
             }
 
+# Тестовый номер для проверки приложения в сторах (SMS не отправляется).
+DEV_TEST_MSISDN = os.environ.get("DEV_TEST_MSISDN", "")
+
+
 def post_sent_code(phone, device_token):
     try:
-        if phone == "992927720598":
+        if DEV_TEST_MSISDN and phone == DEV_TEST_MSISDN:
+            logger.warning("Запрос кода на тестовый номер")
             return {
                 "exit_location_id": "24002",
                 "response_id": 303704102,
@@ -88,26 +101,33 @@ def post_sent_code(phone, device_token):
             mycursor.callproc('generate_sms_code', args)
             mycursor.execute("select @_generate_sms_code_8,@_generate_sms_code_9,@_generate_sms_code_10,@_generate_sms_code_11,@_generate_sms_code_12,@_generate_sms_code_13")
             result=mycursor.fetchall()
-            msg=translation.gettext("Код активации")+": "+str(result[0][0])
-            print('phone===>>> ', phone)
-            print('msg===>>> ', msg)
-            msg= "Activation Code: "+str(result[0][0])
+            msg = "Activation Code: " + str(result[0][0])
+            logger.info("sms code generated for %s", str(phone)[-4:])
             resp={"exit_location_id":result[0][2],"response_id":result[0][3],"result":result[0][4],"err_msg":result[0][5]}
-            if result[0][4]==0:
+            if result[0][4]!=0:
+                # процедура отказала (например, лимит кодов) - SMS не отправляем
+                resp["txn_id"]=result[0][1]
+                return resp
 
-                reqUrl = "https://my.tcell.tj/api/v1/send_sms/"
-                headersList = {
-                "Accept": "*/*",
-                "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-                "Content-Type": "application/json" 
-                }
+            if os.environ.get("SMS_ENABLED", "true").lower() == "true":
                 payload = json.dumps({
-                                        "msisdn": phone[-9:],
-                                        "text": msg,
-                                        "login":"UserSms",
-                                        "pass": "!Sendsms@pass"
-                                        })
-                response = requests.request("POST", reqUrl, data=payload,  headers=headersList)
+                    "msisdn": phone[-9:],
+                    "text": msg,
+                    "login": SMS_LOGIN,
+                    "pass": SMS_PASSWORD,
+                })
+                try:
+                    response = requests.post(
+                        SMS_URL,
+                        data=payload,
+                        headers={"Accept": "*/*", "Content-Type": "application/json"},
+                        timeout=SMS_TIMEOUT,
+                    )
+                    response.raise_for_status()
+                except requests.RequestException as exc:
+                    logger.error("[ERROR] sms gateway: %r", exc)
+                    return {"sms_unavailable": True,
+                            "message": "authentification.db.post_sent_code -> sms gateway: %r" % (exc,)}
 
             resp = {
                         "result": 0,
@@ -116,7 +136,7 @@ def post_sent_code(phone, device_token):
             resp["txn_id"]=result[0][1]
             
         return resp
-    except:
+    except Exception:
         return {
             "status": "error", 
             "message":"authentification.db.post_sent_code -> " + str(sys.exc_info()[1])
@@ -145,9 +165,13 @@ def post_check_sent_code(request, txn_id, sms_code):
             result=mycursor.fetchall()
             
 
-            mycursor.execute("""Select block cnt_delivery from piza_contact_info pci where pci.phone=""" + str(result[0][2]) +""";""")
-            colomns_orders_id = [i[0] for i in mycursor.description]
-            delivery_cnt = [dict(zip(colomns_orders_id, row)) for row in mycursor]
+            # при ошибках (например 22001) процедура возвращает o_msisdn = NULL
+            if result[0][2]:
+                mycursor.execute("Select block cnt_delivery from piza_contact_info pci where pci.phone=%s;", [result[0][2]])
+                colomns_orders_id = [i[0] for i in mycursor.description]
+                delivery_cnt = [dict(zip(colomns_orders_id, row)) for row in mycursor]
+            else:
+                delivery_cnt = []
             
             if delivery_cnt == []:
                 delivery_cnt = 1
@@ -162,16 +186,18 @@ def post_check_sent_code(request, txn_id, sms_code):
             user_language=lang_ref.get(lang_id,'ru')
             resp['lang'] = user_language
             translation.activate(user_language)
-            resp['err_msg']=translation.gettext(resp['err_msg'])
+            if resp['err_msg']:
+                resp['err_msg']=translation.gettext(resp['err_msg'])
             resp['err_msg']=resp['err_msg']
             resp["auth_token"]=result[0][0]
         return resp 
 
 
-    except:
+    except Exception:
+        logger.exception("[ERROR] authentification.db.post_check_sent_code")
         return {
-            "status": "error", 
-            "message":"authentification.db.post_check_sent_code -> " + str(sys.exc_info()[1])
+            "status": "error",
+            "message": "authentification.db.post_check_sent_code -> " + str(sys.exc_info()[1])
             }
 
 def post_logout(request):
@@ -198,13 +224,13 @@ def post_logout(request):
                 resp = {"exit_location_id": result[0][0], "responce_id": result[0][1], "result": result[0][2],
                         "err_msg": result[0][3]}
                 return resp
-            except Error as e:
-                error = e.args
-                resp = {"exit_location_id": 88886, "response_id": 88886, "result": -88886,
-                        "err_msg": "Error occurred while processing your request", "exception_source": 'mysql',
-                        "exception_err_code": error[0], "exception_err_msg": error[1]}
-                return resp
-    except:
+            except Exception as exc:
+                logger.exception("[ERROR] authentification.db.post_logout (proc)")
+                return {"exit_location_id": 88886, "response_id": 88886, "result": -88886,
+                        "err_msg": "Error occurred while processing your request",
+                        "exception_source": 'mysql', "exception_err_msg": str(exc)}
+    except Exception:
+        logger.exception("[ERROR] authentification.db.post_logout")
         return {
             "status": "error", 
             "message":"authentification.db.post_logout -> " + str(sys.exc_info()[1])
@@ -212,7 +238,7 @@ def post_logout(request):
 
 def send_sms(msisdn: str, text: str):
     try:
-        if sendSMS(str(msisdn),text):
+        if sendSMS(str(msisdn), text):
             resp = {
                     "result": 0,
                     "err_msg": "sms sent"
@@ -223,5 +249,6 @@ def send_sms(msisdn: str, text: str):
                     "err_msg": "sms sent error"
                     }
         return resp
-    except:
+    except Exception:
+        logger.exception("[ERROR] authentification.db.send_sms")
         return False

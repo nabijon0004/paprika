@@ -16,20 +16,31 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%rrm$z6itw*rbqk$c-7y_*e+=w+0o5^9#ylnxktlkup+r()iro'
+def _env_list(name, default):
+    value = os.environ.get(name) or default
+    return [item.strip() for item in value.split(',') if item.strip()]
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
-#ALLOWED_HOSTS = ['217.8.35.24', 'localhost', '0.0.0.0:8000', '127.0.0.1', '192.168.1.100', '192.168.90.251', '10.249.129.36']
-ALLOWED_HOSTS = ['*']
+# Ключ и режим отладки берутся из окружения. Значение по умолчанию годится
+# только для локальной разработки - в проде задайте DJANGO_SECRET_KEY.
+SECRET_KEY = (os.environ.get('DJANGO_SECRET_KEY')
+              or 'django-insecure-local-development-key-do-not-use-in-production')
+
+DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() == 'true'
+
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', '*')
 
 # Behind the Caddy reverse proxy (HTTPS terminated there)
-CSRF_TRUSTED_ORIGINS = ['https://mypaprika.net', 'https://www.mypaprika.net']
+CSRF_TRUSTED_ORIGINS = _env_list(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+    'https://mypaprika.net,https://www.mypaprika.net',
+)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # Application definition
 
@@ -42,6 +53,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'drf_yasg',
     'piza',
     'authentification',
 ]
@@ -76,9 +88,9 @@ TEMPLATES = [
     },
 ]
 
-#CORS_ALLOW_ALL_ORIGINS = True
-
-CORS_ORIGIN_ALLOW_ALL = True
+# Мобильному приложению CORS не нужен; список можно сузить через DJANGO_CORS_ORIGINS
+CORS_ALLOWED_ORIGINS = _env_list('DJANGO_CORS_ORIGINS', '')
+CORS_ALLOW_ALL_ORIGINS = not CORS_ALLOWED_ORIGINS
 
 WSGI_APPLICATION = 'apimobile.wsgi.application'
 
@@ -98,10 +110,25 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': os.environ.get('DB_NAME', 'paprika'),
         'USER': os.environ.get('DB_USER', 'admin'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'Admin!2022'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '3306'),
+        # соединение переиспользуется между запросами вместо переподключения
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '60')),
+        'OPTIONS': {'charset': 'utf8mb4'},
     }
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'default': {'format': '%(asctime)s %(levelname)s %(name)s %(message)s'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'default'},
+    },
+    'root': {'handlers': ['console'], 'level': os.environ.get('LOG_LEVEL', 'INFO')},
 }
 
 
@@ -154,3 +181,24 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'AuthToken': {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': 'auth-token',
+            'description': 'auth_token из ответа /auth/check-sent-code/',
+        },
+    },
+    'USE_SESSION_AUTH': False,
+    'DOC_EXPANSION': 'none',
+    'OPERATIONS_SORTER': 'alpha',
+    'TAGS_SORTER': 'alpha',
+}
+
+REST_FRAMEWORK = {
+    # API авторизуется собственным заголовком auth-token, а не сессией Django.
+    # Без этого SessionAuthentication требует CSRF-токен, если в браузере есть вход в /admin/.
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+}

@@ -1,4 +1,3 @@
-from django.contrib.admin.sites import all_sites
 from django.urls import path
 from .views import OTP, VerifyOTP, Refresh, SendCode, CheckSentCode, Logout, LogOut
 

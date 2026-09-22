@@ -1,77 +1,58 @@
 """
-decorators for checking auth level
+Декораторы проверки уровня авторизации.
 """
 import functools
-from rest_framework.response import Response
+import logging
+import os
+
 from django.utils import translation
+
 from .db import verify_auth_token
-from authentification import token as JWT
 
-def check_access(*args, **kwargs):
-    """
-    Cheacking access with comparing MSISDN and IMSI
-    """
-    msisdn = args[0].META.get('HTTP_MSISDN', False)
-    imsi = args[0].META.get('HTTP_IMSI', False)
-    if msisdn and imsi:
-        res = get_IMSI_by_MSISDN(msisdn)
-        if (
-            len(res)>0 
-            and 
-            "IMSI" in res[0].keys()
-            and 
-            int(imsi) == int(res[0]['IMSI'])
-            ):
-            return True, msisdn
-        else:
-            return False, msisdn
-    else:
-        return False, msisdn
+logger = logging.getLogger(__name__)
 
-def check_token(*args, **kwargs):
-    """
-    Checking access by token
-    """
-    if args[0].session.get('is_authenticated', False) == True:
-        language = "ru"
-        if "lang" in args[0].session.keys():
-            language = args[0].session['lang']
-        translation.activate(language)
-        return True, args[0].session['msisdn'], ""
-    token = args[0].META.get('HTTP_AUTH_TOKEN', False)
+# Отладочный токен для тестового номера. Задаётся только в dev-окружении
+# (переменные DEV_AUTH_TOKEN и DEV_AUTH_MSISDN); в проде обе пустые.
+DEV_AUTH_TOKEN = os.environ.get("DEV_AUTH_TOKEN", "")
+DEV_AUTH_MSISDN = os.environ.get("DEV_AUTH_MSISDN", "")
 
-    if token == False:
+
+def check_token(request, *args, **kwargs):
+    """Проверка доступа по auth-token или по активной сессии."""
+    if request.session.get('is_authenticated', False):
+        translation.activate(request.session.get('lang', 'ru'))
+        return True, request.session['msisdn'], ""
+
+    token = request.META.get('HTTP_AUTH_TOKEN', "")
+    if not token:
         return False, False, False
 
+    if DEV_AUTH_TOKEN and DEV_AUTH_MSISDN and token == DEV_AUTH_TOKEN:
+        logger.warning("Использован отладочный auth-token")
+        return True, DEV_AUTH_MSISDN, token
 
-    if token:
-        if token == "ebb586578981c73462f74a572b00763e7201c06870edb1ff5345d81d018aa7ab":
-            return True, "992927770004", token
-        r = verify_auth_token(token)
-        if 'msisdn' in r.keys():
-            return True, r['msisdn'], token
-        return False, False, False
+    result = verify_auth_token(token)
+    if 'msisdn' in result:
+        return True, result['msisdn'], token
+    return False, False, False
+
 
 def auth_required(token_only):
     """
-    Decorator for checking AUTH level
-    if token_only == True checks auth_token 
-    else checks MSISDN vs IMSI and auth_token
+    Проверяет auth-token и подставляет msisdn в kwargs вызываемой функции.
+    При token_only=True в kwargs также кладётся сам токен.
     """
     def decorator(func):
         @functools.wraps(func)
-        def wrapper_function(*args, **kwargs):
-            has_access, msisdn, auth_token = check_token(*args, **kwargs)
+        def wrapper_function(request, *args, **kwargs):
+            has_access, msisdn, auth_token = check_token(request, *args, **kwargs)
             kwargs['msisdn'] = msisdn
             if token_only:
-                kwargs['auth-token'] = auth_token
-            if not has_access and not token_only:
-                # check token, msisdn and imsi
-                has_access, msisdn = check_access(*args, **kwargs)
-                kwargs['msisdn'] = msisdn
+                # именно auth_token: с дефисом это не имя параметра,
+                # и обёрнутые функции падали с TypeError
+                kwargs['auth_token'] = auth_token
             if has_access:
-                return func(*args, **kwargs)
-            else:
-                return {'status': "error", 'un_authorized': True}
+                return func(request, *args, **kwargs)
+            return {'status': "error", 'un_authorized': True}
         return wrapper_function
     return decorator

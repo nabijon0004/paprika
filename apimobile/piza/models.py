@@ -1,8 +1,5 @@
-import datetime
-from distutils.command import upload
-from tabnanny import verbose
 from django.db import models
-from .db import post_pizaproduct_order, get_orders_list, post_report_list, post_add_orders, get_profil_list, post_order_detail, post_add_contract, post_pick_up, get_orders_list_courier, post_order_detail_courier, post_status_change, get_orders_report_courier, post_push_courier, get_orders_list_kitchens, post_branch_change, post_report_order_list
+from .db import get_orders_list, post_report_list, post_add_orders, get_profil_list, post_order_detail, post_add_contract, post_pick_up, get_orders_list_courier, post_order_detail_courier, post_status_change, get_orders_report_courier, post_push_courier, get_orders_list_kitchens, post_branch_change, post_report_order_list
 from authentification.auth_decorators import auth_required
 
 
@@ -162,12 +159,26 @@ class orders(models.Model):
         verbose_name = 'Заказы'
         verbose_name_plural = 'Заказы'
         ordering = ['-order_id']
+        # все отчёты фильтруют/группируют по этим колонкам
+        indexes = [
+            models.Index(fields=['order_id'], name='piza_orders_order_id_idx'),
+            models.Index(fields=['phone'], name='piza_orders_phone_idx'),
+            models.Index(fields=['date'], name='piza_orders_date_idx'),
+        ]
 
     def __str__(self):
         return 'Заказ {}'.format(self.order_id)
 
     def get_total_cost(self):
         return sum(item.get_cost() for item in self.items.all())
+
+
+class orders_report(orders):
+    """Пункт "Отчёт по заказам" в списке отчётов админки (своей таблицы нет)."""
+    class Meta:
+        proxy = True
+        verbose_name = 'Отчёт по заказам'
+        verbose_name_plural = 'Отчёт по заказам'
 
 class OrderItem(models.Model):
     order = models.ForeignKey(orders, related_name='order_items', on_delete=models.PROTECT)
@@ -180,10 +191,6 @@ class OrderItem(models.Model):
 
     def get_cost(self):
         return self.price * self.quantity
- 
-#@auth_required(token=False)
-def pizaproduct_order(request, category):
-    return post_pizaproduct_order(request, category)
 
 class order_status(models.Model):
     status_name = models.CharField(verbose_name='Статус', max_length=50)
@@ -205,6 +212,13 @@ class DeliveryInfo(models.Model):
     status = models.IntegerField(verbose_name='Статус', choices=STATUS)
     delivery_etime = models.DateTimeField(verbose_name='Время доставки', null=True)
     order = models.OneToOneField(orders, related_name='InfoDelivery', on_delete=models.PROTECT)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['phone'], name='piza_delivery_phone_idx'),
+            models.Index(fields=['courier'], name='piza_delivery_courier_idx'),
+            models.Index(fields=['cre_date'], name='piza_delivery_cre_date_idx'),
+        ]
 
 class courier(models.Model):
     courier_phone = models.CharField(verbose_name='Телефон курьера', max_length=12, null=True)
@@ -239,10 +253,12 @@ class contact_info(models.Model):
         verbose_name = 'Контактная информация'
         verbose_name_plural = 'Контактная информация'
         ordering = ['id']
+        indexes = [
+            models.Index(fields=['phone'], name='piza_contact_phone_idx'),
+        ]
 
 @auth_required(token_only=False)
 def orders_list(request, msisdn):
-    print(f"Fetching orders list for msisdn: {msisdn}")
     return get_orders_list(msisdn)
 
 @auth_required(token_only=False)

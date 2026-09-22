@@ -33,6 +33,6 @@ def decode(token: str):
         res['success'] = True
         return res
     except jwt.ExpiredSignatureError:
-        return {"success":False, "status":"error", "message":"Token life time expired"}
-    except:
-        return {"success":False, "status":"error", "message":"Invalid token"}
+        return {"success": False, "status": "error", "message": "Token life time expired"}
+    except jwt.PyJWTError:
+        return {"success": False, "status": "error", "message": "Invalid token"}

@@ -33,10 +33,19 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProductListSerializer(serializers.ModelSerializer):
+    CategoryName = serializers.SerializerMethodField()
+
     class Meta:
         model = Products
         depth =1
-        fields = ('id', 'name', 'ProductItem', 'Ingredients', 'category', 'position', 'image', 'status')
+        fields = ('id', 'name', 'CategoryName', 'ProductItem', 'Ingredients', 'category', 'position', 'image', 'status')
+
+    def get_CategoryName(self, obj):
+        # Products.category хранит id категории числом, связи в базе нет,
+        # поэтому категории читаем одним запросом и держим в словаре.
+        if not hasattr(self, '_category_map'):
+            self._category_map = dict(category.objects.values_list('id', 'cat_name'))
+        return self._category_map.get(obj.category)
 
 class CategoryListSerializer(serializers.ModelSerializer):
     class Meta:

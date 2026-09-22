@@ -1,19 +1,27 @@
-#from apimobile.piza.models import orders
-from itertools import count
 from rest_framework import serializers
-from piza.models import Products, category, orders, OrderItem, ProductItem, contact_info, slide, menu_text, courier
+from piza.models import (
+    DeliveryInfo, OrderItem, ProductItem, Products, category, contact_info,
+    menu_text, orders, slide,
+)
 
 class ProductItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductItem
         fields = '__all__'
 
+class DeliveryInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliveryInfo
+        fields = ('id', 'delivery_time', 'adress', 'comment', 'cre_date',
+                  'phone', 'courier', 'status', 'delivery_etime')
+
 class DeliverySerializer(serializers.ModelSerializer):
-    InfoDelivery = ProductItemSerializer(many=True)
+    # InfoDelivery - обратная сторона OneToOne, объект, а не список
+    InfoDelivery = DeliveryInfoSerializer(read_only=True)
+
     class Meta:
         model = orders
-        depth =2
-        fields = ('id', 'InfoDelivery','time_delivery', 'adress', 'comment', 'date', 'phone')
+        fields = ('id', 'InfoDelivery', 'time_delivery', 'adress', 'comment', 'date', 'phone')
 
 class BasketSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,10 +41,19 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProductListSerializer(serializers.ModelSerializer):
+    CategoryName = serializers.SerializerMethodField()
+
     class Meta:
         model = Products
         depth =1
-        fields = ('id', 'name', 'ProductItem', 'Ingredients', 'category', 'position', 'image', 'status')
+        fields = ('id', 'name', 'CategoryName', 'ProductItem', 'Ingredients', 'category', 'position', 'image', 'status')
+
+    def get_CategoryName(self, obj):
+        # Products.category хранит id категории числом, связи в базе нет,
+        # поэтому категории читаем одним запросом и держим в словаре.
+        if not hasattr(self, '_category_map'):
+            self._category_map = dict(category.objects.values_list('id', 'cat_name'))
+        return self._category_map.get(obj.category)
 
 class CategoryListSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,9 +1,13 @@
-from django.contrib import admin
-from django.urls import path, include
-from piza.views import *
-from django.conf import settings
-from django.conf.urls.static import static
-from . import views
+from django.urls import path
+
+from piza.views import (
+    AddContactView, AddOrders, BasketList, BranchChange, CategoryListView,
+    MenuTextListView, OrderDetail, OrderDetailCourier, OrdersList,
+    OrdersListCourier, OrdersListKitchens, OrdersPushCourier, OrdersReportCourier,
+    PickUp, PizaCategoryView, PizaDetailView, PizaListView, Profil,
+    ProductCreateView, ReporOrdertList, ReportList, SlideListView, StatusChange,
+    StatusChangeKitchens, index,
+)
 
 urlpatterns = [
     path('create-product/', ProductCreateView.as_view()),
@@ -28,7 +32,7 @@ urlpatterns = [
     path('orders-report-courier/', OrdersReportCourier.as_view()),
     path('orders-push-courier/', OrdersPushCourier.as_view()),
     path('orders-list-kitchens/', OrdersListKitchens.as_view()),
-    path('index', views.index),
+    path('index', index),
     path('report-list/', ReportList.as_view()),
     path('report-order-list/', ReporOrdertList.as_view()),
 ]

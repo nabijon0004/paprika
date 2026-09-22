@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.shortcuts import redirect
 from django.urls import path, reverse
 from django.utils.html import format_html
 
@@ -7,7 +8,7 @@ from .order_report import order_report
 # Register your models here.
 
 
-from .models import Products, customers, category, sales_report, TestTable, orders, OrderItem, ProductItem, contact_info, DeliveryInfo, branch, slide, menu_text
+from .models import orders_report, Products, customers, category, sales_report, TestTable, orders, OrderItem, ProductItem, contact_info, DeliveryInfo, branch, slide, menu_text
 
 class ProductItemAdmin(admin.TabularInline):
     model = ProductItem
@@ -79,10 +80,19 @@ admin.site.register(menu_text, TextMenuAdmin)
 
 
 class ProductsAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'status', 'time_preparing')
+    list_display = ('name', 'category', 'status', 'time_preparing', 'volumes')
     list_filter = ('category', 'status',)
     search_fields = ('name', 'category__name',)
-    
+    inlines = [ProductItemAdmin]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related('ProductItem')
+
+    def volumes(self, obj):
+        items = [f'{i.volume_name} — {format(i.price.normalize(), "f")}' for i in obj.ProductItem.all()]
+        return ', '.join(items) or '-'
+    volumes.short_description = 'Объем/размер и цена'
+
 class OrdersAdmin(admin.ModelAdmin):
     list_display = ('order_id', 'phone', 'product', 'date', 'adress', 'paid', 'order_details')
     list_filter = ('date', 'product',)
@@ -114,3 +124,27 @@ class DeliveryInfoAdmin(admin.ModelAdmin):
 admin.site.register(Products, ProductsAdmin)
 admin.site.register(orders, OrdersAdmin)
 admin.site.register(DeliveryInfo, DeliveryInfoAdmin)
+
+
+class OrdersReportAdmin(admin.ModelAdmin):
+    """Пункт списка отчётов: ведёт на страницу "Отчёт по заказам"."""
+
+    def has_module_permission(self, request):
+        return request.user.has_perm('piza.view_orders')
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm('piza.view_orders')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        return redirect('admin:piza_orders_report')
+
+admin.site.register(orders_report, OrdersReportAdmin)

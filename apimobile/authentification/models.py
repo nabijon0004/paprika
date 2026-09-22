@@ -1,6 +1,5 @@
-from pyexpat import model
 from authentification.auth_decorators import auth_required
-from .db import *
+from .db import post_check_sent_code, post_logout, post_sent_code
 from .base_auth import generate_otp, generate_txn, get_subs_id
 from django.db import models
 
@@ -25,7 +24,8 @@ class AuthenCredentianls(models.Model):
     msisdn        = models.CharField(max_length=15)
     subs_id       = models.IntegerField(blank=True, null=True)  
     otp_value     = models.IntegerField(blank=True, null=True)        
-    txn_value     = models.IntegerField(default = generate_txn())       
+    # без ссылки на функцию значение вычислялось один раз при импорте
+    txn_value     = models.IntegerField(default=generate_txn)       
     start_date    = models.DateTimeField(auto_now_add=True,)
     device_model  = models.CharField(max_length=200)
     device_os     = models.CharField(max_length=200)
